@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import API from "../api/axios";
+import { login, saveToken } from "../api/authAPI";
 
 function Login({ setToken }) {
   const [email, setEmail] = useState("");
@@ -21,16 +21,15 @@ function Login({ setToken }) {
 
     try {
       setLoading(true);
-      const res = await API.post("/auth/login", { email, password });
-      const token = res.data.token;
+      const data = await login(email, password);
 
-      if (!token) {
+      if (!data.token) {
         setError("Server did not return a token");
         return;
       }
 
-      localStorage.setItem("token", token);
-      setToken(token);
+      saveToken(data.token);
+      setToken(data.token);
       navigate("/dashboard");
     } catch (err) {
       setError(err.response?.data?.message || "Login failed. Please try again.");

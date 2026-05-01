@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import API from "../api/axios";
+import { getTasks, createTask, updateTask, deleteTask as deleteTaskAPI, toggleTaskStatus } from "../api/taskAPI";
+import { getProfile } from "../api/userAPI";
+import { removeToken } from "../api/authAPI";
 
 function Dashboard({ setToken }) {
   const [tasks, setTasks] = useState([]);
+  const [userName, setUserName] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(true);
@@ -15,10 +18,16 @@ function Dashboard({ setToken }) {
 
   const navigate = useNavigate();
 
+  const logout = useCallback(() => {
+    removeToken();
+    setToken(null);
+    navigate("/login");
+  }, [setToken, navigate]);
+
   const fetchTasks = useCallback(async () => {
     try {
-      const res = await API.get("/tasks");
-      setTasks(res.data);
+      const data = await getTasks();
+      setTasks(data);
     } catch (err) {
       if (err.response?.status === 401 || err.response?.status === 400) {
         logout();
@@ -26,17 +35,21 @@ function Dashboard({ setToken }) {
     } finally {
       setLoading(false);
     }
+  }, [logout]);
+
+  const fetchProfile = useCallback(async () => {
+    try {
+      const user = await getProfile();
+      setUserName(user.name);
+    } catch (err) {
+      console.error("Profile fetch error:", err);
+    }
   }, []);
 
   useEffect(() => {
     fetchTasks();
-  }, [fetchTasks]);
-
-  const logout = () => {
-    localStorage.removeItem("token");
-    setToken(null);
-    navigate("/login");
-  };
+    fetchProfile();
+  }, [fetchTasks, fetchProfile]);
 
   const addTask = async (e) => {
     e.preventDefault();
@@ -44,7 +57,7 @@ function Dashboard({ setToken }) {
 
     try {
       setAdding(true);
-      await API.post("/tasks", { title: title.trim(), description: description.trim() });
+      await createTask(title.trim(), description.trim());
       setTitle("");
       setDescription("");
       fetchTasks();
@@ -55,10 +68,9 @@ function Dashboard({ setToken }) {
     }
   };
 
-  const toggleStatus = async (task) => {
-    const newStatus = task.status === "completed" ? "pending" : "completed";
+  const handleToggleStatus = async (task) => {
     try {
-      await API.put(`/tasks/${task._id}`, { status: newStatus });
+      await toggleTaskStatus(task._id, task.status);
       fetchTasks();
     } catch (err) {
       console.error("Toggle error:", err);
@@ -74,7 +86,7 @@ function Dashboard({ setToken }) {
   const saveEdit = async () => {
     if (!editTitle.trim()) return;
     try {
-      await API.put(`/tasks/${editingTask._id}`, {
+      await updateTask(editingTask._id, {
         title: editTitle.trim(),
         description: editDescription.trim(),
       });
@@ -85,9 +97,9 @@ function Dashboard({ setToken }) {
     }
   };
 
-  const deleteTask = async (id) => {
+  const handleDelete = async (id) => {
     try {
-      await API.delete(`/tasks/${id}`);
+      await deleteTaskAPI(id);
       setDeletingId(null);
       fetchTasks();
     } catch (err) {
@@ -104,7 +116,9 @@ function Dashboard({ setToken }) {
       <header className="dashboard-header">
         <div className="brand">✦ TaskFlow</div>
         <div className="user-info">
-          <span className="greeting">Your workspace</span>
+          <span className="greeting">
+            {userName ? `Welcome, ${userName}` : "Your workspace"}
+          </span>
           <button className="btn-logout" onClick={logout}>
             Sign Out
           </button>
@@ -191,7 +205,7 @@ function Dashboard({ setToken }) {
               >
                 <div
                   className="task-checkbox"
-                  onClick={() => toggleStatus(task)}
+                  onClick={() => handleToggleStatus(task)}
                   title="Mark complete"
                 ></div>
                 <div className="task-info">
@@ -213,7 +227,7 @@ function Dashboard({ setToken }) {
                     <div className="delete-confirm">
                       <button
                         className="btn-icon"
-                        onClick={() => deleteTask(task._id)}
+                        onClick={() => handleDelete(task._id)}
                         title="Confirm delete"
                         style={{ color: "var(--danger)" }}
                       >
@@ -258,7 +272,7 @@ function Dashboard({ setToken }) {
               >
                 <div
                   className="task-checkbox checked"
-                  onClick={() => toggleStatus(task)}
+                  onClick={() => handleToggleStatus(task)}
                   title="Mark pending"
                 ></div>
                 <div className="task-info">
@@ -280,7 +294,7 @@ function Dashboard({ setToken }) {
                     <div className="delete-confirm">
                       <button
                         className="btn-icon"
-                        onClick={() => deleteTask(task._id)}
+                        onClick={() => handleDelete(task._id)}
                         title="Confirm delete"
                         style={{ color: "var(--danger)" }}
                       >
